@@ -303,19 +303,24 @@ export const BannerCanvas = forwardRef<BannerCanvasRef, BannerCanvasProps>(
 
     useEffect(() => {
       if (canvas) {
-        // 初期化時にサンプルテキストを追加
-        const text = new IText('Hello World!', {
-          left: DEFAULT_TEXT_CONFIG.LEFT,
-          top: DEFAULT_TEXT_CONFIG.TOP,
-          fontFamily: DEFAULT_TEXT_CONFIG.FONT_FAMILY,
-          fontSize: DEFAULT_TEXT_CONFIG.FONT_SIZE,
-          fill: DEFAULT_TEXT_CONFIG.COLOR,
-          originX: 'center',
-          originY: 'center',
-          editable: true,
-        })
-        canvas.add(text)
-        canvas.bringObjectToFront(text) // 初期テキストを最前面に
+        // 既存のテキストオブジェクトがあるかチェック
+        const existingTexts = canvas.getObjects().filter(obj => obj.type === 'text' || obj.type === 'i-text')
+        
+        // 初回のみサンプルテキストを追加
+        if (existingTexts.length === 0) {
+          const text = new IText('Hello World!', {
+            left: DEFAULT_TEXT_CONFIG.LEFT,
+            top: DEFAULT_TEXT_CONFIG.TOP,
+            fontFamily: DEFAULT_TEXT_CONFIG.FONT_FAMILY,
+            fontSize: DEFAULT_TEXT_CONFIG.FONT_SIZE,
+            fill: DEFAULT_TEXT_CONFIG.COLOR,
+            originX: 'center',
+            originY: 'center',
+            editable: true,
+          })
+          canvas.add(text)
+          canvas.bringObjectToFront(text) // 初期テキストを最前面に
+        }
         
         canvas.renderAll()
         
@@ -323,6 +328,10 @@ export const BannerCanvas = forwardRef<BannerCanvasRef, BannerCanvasProps>(
         canvas.defaultCursor = 'default'
         canvas.hoverCursor = 'pointer'
         canvas.moveCursor = 'move'
+        
+        // 既存のイベントリスナーをクリア
+        canvas.off('text:changed')
+        canvas.off('text:editing:exited')
         
         // テキスト編集イベントリスナーを追加
         canvas.on('text:changed', (e) => {
