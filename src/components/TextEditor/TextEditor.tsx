@@ -4,7 +4,6 @@ import { FontSelector } from '../FontSelector'
 interface TextEditorProps {
   onAddText: (text: string) => void
   onUpdateText: (updates: TextUpdate) => void
-  onDeleteText: () => void
 }
 
 interface TextUpdate {
@@ -13,6 +12,7 @@ interface TextUpdate {
   color?: string
   fontWeight?: string
   fontFamily?: string
+  fontStyle?: 'normal' | 'italic'
   isVertical?: boolean
   shadow?: {
     enabled: boolean
@@ -26,13 +26,13 @@ interface TextUpdate {
 export const TextEditor: React.FC<TextEditorProps> = ({
   onAddText,
   onUpdateText,
-  onDeleteText,
 }) => {
   const [newText, setNewText] = useState('')
   const [fontSize, setFontSize] = useState(48)
   const [textColor, setTextColor] = useState('#000000')
   const [fontWeight, setFontWeight] = useState('400')
   const [fontFamily, setFontFamily] = useState('Noto Sans JP')
+  const [fontStyle, setFontStyle] = useState<'normal' | 'italic'>('normal')
   const [shadowEnabled, setShadowEnabled] = useState(false)
   const [shadowColor, setShadowColor] = useState('#000000')
   const [shadowBlur, setShadowBlur] = useState(4)
@@ -79,7 +79,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
             onChange={(e) => setNewText(e.target.value)}
             placeholder="テキストを入力..."
             className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            onKeyDown={(e) => e.key === 'Enter' && handleAddText()}
           />
           <button
             onClick={handleAddText}
@@ -153,6 +152,26 @@ export const TextEditor: React.FC<TextEditorProps> = ({
           />
           <label htmlFor="vertical-text" className="text-sm font-medium text-gray-700">
             縦書きモード
+          </label>
+        </div>
+      </div>
+
+      {/* 斜体設定 */}
+      <div className="mb-4">
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="italic-text"
+            checked={fontStyle === 'italic'}
+            onChange={(e) => {
+              const style = e.target.checked ? 'italic' : 'normal'
+              setFontStyle(style)
+              onUpdateText({ fontStyle: style })
+            }}
+            className="mr-2"
+          />
+          <label htmlFor="italic-text" className="text-sm font-medium text-gray-700">
+            斜体（イタリック）
           </label>
         </div>
       </div>
@@ -272,16 +291,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
             </div>
           </div>
         )}
-      </div>
-
-      {/* テキスト削除 */}
-      <div className="mb-4">
-        <button
-          onClick={onDeleteText}
-          className="w-full px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm font-medium"
-        >
-          選択中のテキストを削除
-        </button>
       </div>
 
       {/* フォント選択 */}

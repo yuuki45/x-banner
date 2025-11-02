@@ -2,7 +2,12 @@ import { useRef, useState, useEffect } from 'react'
 import { BannerCanvas, BannerCanvasRef } from './components/Canvas'
 import { TextEditor } from './components/TextEditor'
 import { BackgroundPicker } from './components/BackgroundPicker'
+import { ShapeInserter } from './components/ShapeInserter'
+import { IconInserter } from './components/IconInserter'
+import { ObjectControls } from './components/ObjectControls'
 import { ExportControls } from './components/ExportControls'
+import { ShapeType } from './constants/shapes'
+import { IconOption } from './constants/icons'
 
 function App() {
   const canvasRef = useRef<BannerCanvasRef>(null)
@@ -10,6 +15,10 @@ function App() {
     const saved = localStorage.getItem('preview-sticky')
     return saved !== null ? JSON.parse(saved) : true
   })
+  const [canUndo, setCanUndo] = useState(false)
+  const [canRedo, setCanRedo] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false)
 
   const handleAddText = (text: string) => {
     canvasRef.current?.addText(text)
@@ -33,10 +42,6 @@ function App() {
     canvasRef.current?.updateSelectedText(updates)
   }
 
-  const handleDeleteText = () => {
-    canvasRef.current?.deleteSelectedText()
-  }
-
   const handleBackgroundChange = (background: {
     type: 'color' | 'gradient' | 'image'
     color?: string
@@ -55,10 +60,80 @@ function App() {
     canvasRef.current?.exportAsPNG()
   }
 
+  const handleAddShape = (shapeType: ShapeType, color: string, size: number) => {
+    canvasRef.current?.addShape(shapeType, color, size)
+  }
+
+  const handleAddIcon = (icon: IconOption, color: string, size: number) => {
+    canvasRef.current?.addIcon(icon, color, size)
+  }
+
+  const handleDeleteSelected = () => {
+    canvasRef.current?.deleteSelectedObject()
+    updateUndoRedoState()
+  }
+
+  const handleUndo = () => {
+    canvasRef.current?.undo()
+    updateUndoRedoState()
+  }
+
+  const handleRedo = () => {
+    canvasRef.current?.redo()
+    updateUndoRedoState()
+  }
+
+  const handleBringToFront = () => {
+    canvasRef.current?.bringToFront()
+  }
+
+  const handleSendToBack = () => {
+    canvasRef.current?.sendToBack()
+  }
+
+  const handleBringForward = () => {
+    canvasRef.current?.bringForward()
+  }
+
+  const handleSendBackward = () => {
+    canvasRef.current?.sendBackward()
+  }
+
+  const updateUndoRedoState = () => {
+    setCanUndo(canvasRef.current?.canUndo() ?? false)
+    setCanRedo(canvasRef.current?.canRedo() ?? false)
+  }
+
   const handleTextChanged = (text: string) => {
     // キャンバス上で直接編集されたテキストがここで通知される
     // 必要に応じて他のUIコンポーネントと同期可能
     console.log('Text changed directly on canvas:', text)
+    updateUndoRedoState()
+  }
+
+  // 自動保存機能
+  const saveCanvas = () => {
+    const json = canvasRef.current?.saveToJSON()
+    if (json) {
+      localStorage.setItem('banner-draft', json)
+      const timestamp = new Date().toISOString()
+      localStorage.setItem('banner-draft-timestamp', timestamp)
+      setLastSaved(new Date(timestamp))
+    }
+  }
+
+  const restoreCanvas = async () => {
+    const draft = localStorage.getItem('banner-draft')
+    if (draft) {
+      await canvasRef.current?.loadFromJSON(draft)
+      setShowRestoreDialog(false)
+    }
+  }
+
+  const discardDraft = () => {
+    localStorage.removeItem('banner-draft')
+    localStorage.removeItem('banner-draft-timestamp')
+    setShowRestoreDialog(false)
   }
 
   const togglePreviewSticky = () => {
@@ -71,15 +146,111 @@ function App() {
     localStorage.setItem('preview-sticky', JSON.stringify(isPreviewSticky))
   }, [isPreviewSticky])
 
+  // キーボードショートカット
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Z (Windows/Linux) または Cmd+Z (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        handleUndo()
+      }
+      // Ctrl+Y (Windows/Linux) または Cmd+Shift+Z (Mac) でやり直し
+      else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+        e.preventDefault()
+        handleRedo()
+      }
+      // Delete または Backspace で削除
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        // テキスト編集中は無視
+        const activeElement = document.activeElement
+        if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
+          e.preventDefault()
+          handleDeleteSelected()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // Undo/Redoの状態を定期的に更新
+  useEffect(() => {
+    const interval = setInterval(updateUndoRedoState, 500)
+    return () => clearInterval(interval)
+  }, [])
+
+  // 自動保存（30秒ごと）
+  useEffect(() => {
+    const interval = setInterval(() => {
+      saveCanvas()
+    }, 30000) // 30秒ごと
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // 起動時の下書き復元確認
+  useEffect(() => {
+    const draft = localStorage.getItem('banner-draft')
+    const timestamp = localStorage.getItem('banner-draft-timestamp')
+
+    if (draft && timestamp) {
+      setShowRestoreDialog(true)
+    }
+  }, [])
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* 復元ダイアログ */}
+      {showRestoreDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">下書きが見つかりました</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {localStorage.getItem('banner-draft-timestamp') &&
+                new Date(localStorage.getItem('banner-draft-timestamp')!).toLocaleString('ja-JP')}
+              に保存された下書きがあります。復元しますか？
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={restoreCanvas}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+              >
+                復元する
+              </button>
+              <button
+                onClick={discardDraft}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors font-medium"
+              >
+                破棄する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
-          <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">X Banner Studio</h1>
-          <p className="text-gray-600 mt-1 sm:mt-2 text-base sm:text-lg">
-            無料でXプロフィールバナーを作成
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">X Banner Studio</h1>
+              <p className="text-gray-600 mt-1 sm:mt-2 text-base sm:text-lg">
+                無料でXプロフィールバナーを作成
+              </p>
+            </div>
+            {/* 自動保存状態 */}
+            {lastSaved && (
+              <div className="hidden sm:flex items-center gap-2 text-sm text-gray-500">
+                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>
+                  最終保存: {lastSaved.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -122,7 +293,6 @@ function App() {
             <div className="mt-3 text-xs text-gray-500 text-center space-y-1" role="note">
               <div>実際のサイズ: 1500×500px</div>
               <div>💡 テキストをダブルクリックで直接編集できます</div>
-              <div>📝 テキストは複数追加できます</div>
             </div>
           </div>
         </section>
@@ -135,7 +305,6 @@ function App() {
               <TextEditor
                 onAddText={handleAddText}
                 onUpdateText={handleUpdateText}
-                onDeleteText={handleDeleteText}
               />
             </section>
             
@@ -143,7 +312,32 @@ function App() {
             <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6" aria-label="背景設定">
               <BackgroundPicker onBackgroundChange={handleBackgroundChange} />
             </section>
-            
+
+            {/* Shape Inserter */}
+            <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6" aria-label="図形挿入">
+              <ShapeInserter onAddShape={handleAddShape} />
+            </section>
+
+            {/* Icon Inserter */}
+            <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6" aria-label="アイコン挿入">
+              <IconInserter onAddIcon={handleAddIcon} />
+            </section>
+
+            {/* Object Controls */}
+            <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6" aria-label="オブジェクト操作">
+              <ObjectControls
+                onDeleteSelected={handleDeleteSelected}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onBringToFront={handleBringToFront}
+                onSendToBack={handleSendToBack}
+                onBringForward={handleBringForward}
+                onSendBackward={handleSendBackward}
+              />
+            </section>
+
             {/* Export Controls */}
             <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6" aria-label="エクスポート">
               <ExportControls onExport={handleExport} />

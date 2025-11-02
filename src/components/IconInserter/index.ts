@@ -1,0 +1,1 @@
+export { IconInserter } from './IconInserter'

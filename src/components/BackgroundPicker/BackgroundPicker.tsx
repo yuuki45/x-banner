@@ -292,8 +292,60 @@ export const BackgroundPicker: React.FC<BackgroundPickerProps> = ({
       )}
 
       {backgroundType === 'image' && (
-        <div>
+        <div className="space-y-4">
           <ImageUploader onImageUpload={handleImageUpload} />
+
+          {/* フリー素材サイトリンク */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <h4 className="text-sm font-medium text-blue-900 mb-2">フリー素材サイト</h4>
+            <p className="text-xs text-blue-800 mb-3">画像をダウンロードして上記にアップロードできます</p>
+            <div className="space-y-2">
+              <a
+                href="https://unsplash.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Unsplash - 高品質な写真
+              </a>
+              <a
+                href="https://aiartstock.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                A.I. ArtStock - AI生成画像
+              </a>
+              <a
+                href="https://studio-aiphoto.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                studio-AI. - AI写真素材
+              </a>
+              <a
+                href="https://www.beiz.jp/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                BEIZ images - 背景素材
+              </a>
+            </div>
+          </div>
         </div>
       )}
     </div>

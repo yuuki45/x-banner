@@ -21,8 +21,16 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
 
   const currentFontOption = FONT_OPTIONS.find(font => font.value === currentFont)
 
-  const loadFont = async (fontFamily: string) => {
-    if (loadedFonts.has(fontFamily)) return
+  const loadFont = async (fontFamily: string, fontWeight: string = '400') => {
+    if (loadedFonts.has(fontFamily)) {
+      // 既に読み込み済みでも、確実に読み込みが完了するまで待つ
+      try {
+        await document.fonts.load(`${fontWeight} 16px "${fontFamily}"`)
+      } catch (error) {
+        console.warn(`Font may not be fully loaded: ${fontFamily}`, error)
+      }
+      return
+    }
 
     try {
       // Google Fonts APIを使用してフォントを動的に読み込み
@@ -32,10 +40,17 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
       document.head.appendChild(link)
 
       // フォントの読み込み完了を待つ
-      await new Promise((resolve) => {
-        link.onload = resolve
-        setTimeout(resolve, 2000) // タイムアウト
+      await new Promise<void>((resolve) => {
+        link.onload = () => resolve()
+        setTimeout(() => resolve(), 2000) // タイムアウト
       })
+
+      // document.fonts.load()でフォントの完全な読み込みを確実に待つ
+      try {
+        await document.fonts.load(`${fontWeight} 16px "${fontFamily}"`)
+      } catch (error) {
+        console.warn(`Font load check failed: ${fontFamily}`, error)
+      }
 
       setLoadedFonts(prev => new Set([...prev, fontFamily]))
     } catch (error) {
@@ -49,8 +64,8 @@ export const FontSelector: React.FC<FontSelectorProps> = ({
   }, [currentFont])
 
   const handleFontSelect = async (font: FontOption) => {
-    await loadFont(font.value)
     const defaultWeight = font.weights.includes('400') ? '400' : font.weights[0]
+    await loadFont(font.value, defaultWeight)
     onFontChange(font.value, defaultWeight)
   }
 

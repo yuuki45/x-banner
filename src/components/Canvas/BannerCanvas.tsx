@@ -1,8 +1,10 @@
-import { useEffect, useImperativeHandle, forwardRef, useState } from 'react'
-import { Canvas, IText, Gradient, FabricImage, Rect } from 'fabric'
+import { useEffect, useImperativeHandle, forwardRef, useState, useRef } from 'react'
+import { Canvas, IText, Gradient, FabricImage, Rect, Circle, Triangle, Polygon, Path, Group } from 'fabric'
 import { useCanvas } from '../../hooks/useCanvas'
 import { CANVAS_CONFIG, DEFAULT_TEXT_CONFIG } from '../../constants/canvas'
 import { exportCanvasAsPNG, downloadImage } from '../../utils/canvas'
+import { ShapeType } from '../../constants/shapes'
+import { IconOption } from '../../constants/icons'
 
 interface BannerCanvasProps {
   className?: string
@@ -17,6 +19,7 @@ interface TextUpdate {
   color?: string
   fontWeight?: string
   fontFamily?: string
+  fontStyle?: 'normal' | 'italic'
   isVertical?: boolean
   shadow?: {
     enabled: boolean
@@ -44,14 +47,47 @@ export interface BannerCanvasRef {
   updateSelectedText: (updates: TextUpdate) => void
   updateBackground: (background: BackgroundConfig) => void
   deleteSelectedText: () => void
+  deleteSelectedObject: () => void
+  addShape: (shapeType: ShapeType, color: string, size: number) => void
+  addIcon: (icon: IconOption, color: string, size: number) => void
   exportAsPNG: () => void
   getCanvas: () => Canvas | null
+  // Undo/Redo機能
+  undo: () => void
+  redo: () => void
+  canUndo: () => boolean
+  canRedo: () => boolean
+  // レイヤー順序変更機能
+  bringToFront: () => void
+  sendToBack: () => void
+  bringForward: () => void
+  sendBackward: () => void
+  // 自動保存機能
+  saveToJSON: () => string
+  loadFromJSON: (json: string) => Promise<void>
+  // スナップ機能
+  enableSnapping: () => void
+  disableSnapping: () => void
 }
 
 export const BannerCanvas = forwardRef<BannerCanvasRef, BannerCanvasProps>(
   ({ className = '', onTextChanged }, ref) => {
     const { canvasRef, canvas } = useCanvas()
     const [windowWidth, setWindowWidth] = useState(0)
+
+    // Undo/Redo履歴管理
+    const historyStack = useRef<string[]>([])
+    const redoStack = useRef<string[]>([])
+    const isLoadingHistory = useRef(false)
+    const historyStep = useRef(0)
+
+    // スナップ機能の状態
+    const [isSnappingEnabled, setIsSnappingEnabled] = useState(true)
+    const snapThreshold = 10 // スナップする距離（px）
+    const guideLineRef = useRef<{
+      vertical: Rect | null
+      horizontal: Rect | null
+    }>({ vertical: null, horizontal: null })
 
     useImperativeHandle(ref, () => ({
       addText: (text: string) => {
@@ -82,6 +118,7 @@ export const BannerCanvas = forwardRef<BannerCanvasRef, BannerCanvasProps>(
             if (updates.color) textObj.set('fill', updates.color)
             if (updates.fontWeight) textObj.set('fontWeight', updates.fontWeight)
             if (updates.fontFamily) textObj.set('fontFamily', updates.fontFamily)
+            if (updates.fontStyle) textObj.set('fontStyle', updates.fontStyle)
             if (updates.text) textObj.set('text', updates.text)
             
             if (updates.isVertical !== undefined) {
@@ -128,6 +165,141 @@ export const BannerCanvas = forwardRef<BannerCanvasRef, BannerCanvasProps>(
             canvas.renderAll()
           }
         }
+      },
+      deleteSelectedObject: () => {
+        if (canvas) {
+          const activeObject = canvas.getActiveObject()
+          if (activeObject) {
+            // 背景画像やオーバーレイは削除しない
+            if (activeObject.selectable !== false) {
+              canvas.remove(activeObject)
+              canvas.discardActiveObject()
+              canvas.renderAll()
+            }
+          }
+        }
+      },
+      addShape: (shapeType: ShapeType, color: string, size: number) => {
+        if (!canvas) return
+
+        let shape: Circle | Rect | Triangle | Polygon | Path | null = null
+        const centerX = CANVAS_CONFIG.WIDTH / 2
+        const centerY = CANVAS_CONFIG.HEIGHT / 2
+
+        switch (shapeType) {
+          case 'circle':
+            shape = new Circle({
+              radius: size / 2,
+              fill: color,
+              left: centerX,
+              top: centerY,
+              originX: 'center',
+              originY: 'center',
+            })
+            break
+
+          case 'rect':
+            shape = new Rect({
+              width: size,
+              height: size,
+              fill: color,
+              left: centerX,
+              top: centerY,
+              originX: 'center',
+              originY: 'center',
+            })
+            break
+
+          case 'triangle':
+            shape = new Triangle({
+              width: size,
+              height: size,
+              fill: color,
+              left: centerX,
+              top: centerY,
+              originX: 'center',
+              originY: 'center',
+            })
+            break
+
+          case 'star':
+            // 星型のポイントを生成
+            const starPoints: { x: number; y: number }[] = []
+            const spikes = 5
+            const outerRadius = size / 2
+            const innerRadius = size / 4
+
+            for (let i = 0; i < spikes * 2; i++) {
+              const radius = i % 2 === 0 ? outerRadius : innerRadius
+              const angle = (Math.PI * i) / spikes
+              starPoints.push({
+                x: radius * Math.sin(angle),
+                y: -radius * Math.cos(angle),
+              })
+            }
+
+            shape = new Polygon(starPoints, {
+              fill: color,
+              left: centerX,
+              top: centerY,
+              originX: 'center',
+              originY: 'center',
+            })
+            break
+
+          case 'heart':
+            // ハート型のSVGパス
+            const heartSize = size / 100
+            const heartPath = `
+              M ${50 * heartSize} ${90 * heartSize}
+              C ${50 * heartSize} ${90 * heartSize}, ${20 * heartSize} ${70 * heartSize}, ${20 * heartSize} ${45 * heartSize}
+              C ${20 * heartSize} ${30 * heartSize}, ${30 * heartSize} ${20 * heartSize}, ${50 * heartSize} ${35 * heartSize}
+              C ${70 * heartSize} ${20 * heartSize}, ${80 * heartSize} ${30 * heartSize}, ${80 * heartSize} ${45 * heartSize}
+              C ${80 * heartSize} ${70 * heartSize}, ${50 * heartSize} ${90 * heartSize}, ${50 * heartSize} ${90 * heartSize}
+              Z
+            `
+            shape = new Path(heartPath, {
+              fill: color,
+              left: centerX,
+              top: centerY,
+              originX: 'center',
+              originY: 'center',
+            })
+            break
+        }
+
+        if (shape) {
+          canvas.add(shape)
+          canvas.setActiveObject(shape)
+          canvas.renderAll()
+        }
+      },
+      addIcon: (icon: IconOption, color: string, size: number) => {
+        if (!canvas) return
+
+        // SVGパスからFabricオブジェクトを作成
+        const iconPath = new Path(icon.svgPath, {
+          fill: color,
+          stroke: null,
+          strokeWidth: 0,
+        })
+
+        // アイコンのサイズを調整（viewBoxを考慮）
+        const viewBoxSize = 24 // デフォルトのviewBoxサイズ
+        const scale = size / viewBoxSize
+
+        iconPath.set({
+          scaleX: scale,
+          scaleY: scale,
+          left: CANVAS_CONFIG.WIDTH / 2,
+          top: CANVAS_CONFIG.HEIGHT / 2,
+          originX: 'center',
+          originY: 'center',
+        })
+
+        canvas.add(iconPath)
+        canvas.setActiveObject(iconPath)
+        canvas.renderAll()
       },
       updateBackground: (background: BackgroundConfig) => {
         if (canvas) {
@@ -299,6 +471,113 @@ export const BannerCanvas = forwardRef<BannerCanvasRef, BannerCanvasProps>(
         }
       },
       getCanvas: () => canvas,
+
+      // Undo/Redo機能
+      undo: () => {
+        if (canvas && historyStack.current.length > 0) {
+          // 現在の状態をredoスタックに保存
+          const currentState = JSON.stringify(canvas.toJSON())
+          redoStack.current.push(currentState)
+
+          // historyから1つ前の状態を取得
+          const previousState = historyStack.current.pop()
+
+          if (previousState) {
+            isLoadingHistory.current = true
+            canvas.loadFromJSON(previousState).then(() => {
+              canvas.renderAll()
+              isLoadingHistory.current = false
+            })
+          }
+        }
+      },
+      redo: () => {
+        if (canvas && redoStack.current.length > 0) {
+          // 現在の状態をhistoryスタックに保存
+          const currentState = JSON.stringify(canvas.toJSON())
+          historyStack.current.push(currentState)
+
+          // redoスタックから1つ取得
+          const nextState = redoStack.current.pop()
+
+          if (nextState) {
+            isLoadingHistory.current = true
+            canvas.loadFromJSON(nextState).then(() => {
+              canvas.renderAll()
+              isLoadingHistory.current = false
+            })
+          }
+        }
+      },
+      canUndo: () => historyStack.current.length > 0,
+      canRedo: () => redoStack.current.length > 0,
+
+      // レイヤー順序変更機能
+      bringToFront: () => {
+        if (canvas) {
+          const activeObject = canvas.getActiveObject()
+          if (activeObject && activeObject.selectable !== false) {
+            canvas.bringObjectToFront(activeObject)
+            canvas.renderAll()
+          }
+        }
+      },
+      sendToBack: () => {
+        if (canvas) {
+          const activeObject = canvas.getActiveObject()
+          if (activeObject && activeObject.selectable !== false) {
+            canvas.sendObjectToBack(activeObject)
+            canvas.renderAll()
+          }
+        }
+      },
+      bringForward: () => {
+        if (canvas) {
+          const activeObject = canvas.getActiveObject()
+          if (activeObject && activeObject.selectable !== false) {
+            canvas.bringObjectForward(activeObject)
+            canvas.renderAll()
+          }
+        }
+      },
+      sendBackward: () => {
+        if (canvas) {
+          const activeObject = canvas.getActiveObject()
+          if (activeObject && activeObject.selectable !== false) {
+            canvas.sendObjectBackwards(activeObject)
+            canvas.renderAll()
+          }
+        }
+      },
+
+      // 自動保存機能
+      saveToJSON: () => {
+        if (canvas) {
+          return JSON.stringify(canvas.toJSON())
+        }
+        return ''
+      },
+      loadFromJSON: async (json: string) => {
+        if (canvas && json) {
+          try {
+            isLoadingHistory.current = true
+            await canvas.loadFromJSON(JSON.parse(json))
+            canvas.renderAll()
+            isLoadingHistory.current = false
+          } catch (error) {
+            console.error('Failed to load canvas from JSON:', error)
+            isLoadingHistory.current = false
+          }
+        }
+      },
+
+      // スナップ機能
+      enableSnapping: () => {
+        setIsSnappingEnabled(true)
+      },
+      disableSnapping: () => {
+        setIsSnappingEnabled(false)
+      },
     }))
 
     useEffect(() => {
@@ -350,6 +629,141 @@ export const BannerCanvas = forwardRef<BannerCanvasRef, BannerCanvasProps>(
         })
       }
     }, [canvas, onTextChanged])
+
+    // Canvas変更時に履歴を保存
+    useEffect(() => {
+      if (canvas && !isLoadingHistory.current) {
+        const saveHistory = () => {
+          if (isLoadingHistory.current) return
+
+          const currentState = JSON.stringify(canvas.toJSON())
+
+          // 履歴スタックに追加（最大50件まで保持）
+          historyStack.current.push(currentState)
+          if (historyStack.current.length > 50) {
+            historyStack.current.shift()
+          }
+
+          // 新しい変更があったらredoスタックをクリア
+          redoStack.current = []
+        }
+
+        // Canvas上でのオブジェクト変更を監視
+        canvas.on('object:modified', saveHistory)
+        canvas.on('object:added', saveHistory)
+        canvas.on('object:removed', saveHistory)
+
+        return () => {
+          canvas.off('object:modified', saveHistory)
+          canvas.off('object:added', saveHistory)
+          canvas.off('object:removed', saveHistory)
+        }
+      }
+    }, [canvas])
+
+    // スナップ機能とガイドライン表示
+    useEffect(() => {
+      if (canvas && isSnappingEnabled) {
+        const centerX = CANVAS_CONFIG.WIDTH / 2
+        const centerY = CANVAS_CONFIG.HEIGHT / 2
+
+        const showGuideLine = (isVertical: boolean) => {
+          if (isVertical) {
+            // 垂直ガイドライン（中央縦線）
+            if (!guideLineRef.current.vertical) {
+              guideLineRef.current.vertical = new Rect({
+                left: centerX,
+                top: 0,
+                width: 2,
+                height: CANVAS_CONFIG.HEIGHT,
+                fill: '#00a8ff',
+                selectable: false,
+                evented: false,
+                opacity: 0.7,
+                originX: 'center',
+              })
+              canvas.add(guideLineRef.current.vertical)
+            }
+            guideLineRef.current.vertical.set('visible', true)
+          } else {
+            // 水平ガイドライン（中央横線）
+            if (!guideLineRef.current.horizontal) {
+              guideLineRef.current.horizontal = new Rect({
+                left: 0,
+                top: centerY,
+                width: CANVAS_CONFIG.WIDTH,
+                height: 2,
+                fill: '#00a8ff',
+                selectable: false,
+                evented: false,
+                opacity: 0.7,
+                originY: 'center',
+              })
+              canvas.add(guideLineRef.current.horizontal)
+            }
+            guideLineRef.current.horizontal.set('visible', true)
+          }
+          canvas.renderAll()
+        }
+
+        const hideGuideLine = (isVertical: boolean) => {
+          if (isVertical && guideLineRef.current.vertical) {
+            guideLineRef.current.vertical.set('visible', false)
+          } else if (!isVertical && guideLineRef.current.horizontal) {
+            guideLineRef.current.horizontal.set('visible', false)
+          }
+          canvas.renderAll()
+        }
+
+        const handleObjectMoving = (e: any) => {
+          const obj = e.target
+          if (!obj || obj.selectable === false) return
+
+          const objCenterX = obj.left
+          const objCenterY = obj.top
+
+          // 水平方向（X軸）の中央揃えスナップ
+          if (Math.abs(objCenterX - centerX) < snapThreshold) {
+            obj.set('left', centerX)
+            showGuideLine(true)
+          } else {
+            hideGuideLine(true)
+          }
+
+          // 垂直方向（Y軸）の中央揃えスナップ
+          if (Math.abs(objCenterY - centerY) < snapThreshold) {
+            obj.set('top', centerY)
+            showGuideLine(false)
+          } else {
+            hideGuideLine(false)
+          }
+
+          obj.setCoords()
+        }
+
+        const handleObjectModified = () => {
+          hideGuideLine(true)
+          hideGuideLine(false)
+        }
+
+        canvas.on('object:moving', handleObjectMoving)
+        canvas.on('object:modified', handleObjectModified)
+
+        return () => {
+          canvas.off('object:moving', handleObjectMoving)
+          canvas.off('object:modified', handleObjectModified)
+          // ガイドラインを削除
+          if (guideLineRef.current.vertical) {
+            canvas.remove(guideLineRef.current.vertical)
+            guideLineRef.current.vertical = null
+          }
+          if (guideLineRef.current.horizontal) {
+            canvas.remove(guideLineRef.current.horizontal)
+            guideLineRef.current.horizontal = null
+          }
+        }
+      }
+    }, [canvas, isSnappingEnabled])
 
     useEffect(() => {
       const handleResize = () => {

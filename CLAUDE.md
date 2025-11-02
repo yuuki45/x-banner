@@ -4,113 +4,170 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-SNS（X/Twitter）のプロフィールバナー画像生成ツールです。ユーザーがX（旧Twitter）のプロフィール用カスタムバナー画像を作成できます。背景、テキスト、装飾の設定を直感的なインターフェースで行い、リアルタイムプレビューとPNGダウンロード機能を提供します。
+SNS（X/Twitter）のプロフィールバナー画像生成ツール。ユーザーが1500×500pxのバナー画像を作成し、背景・テキストを編集してPNG出力できるWebアプリケーションです。
 
-**対象サイズ**: 1500×500px（X推奨バナーサイズ）
-
-## プロジェクト状況
-
-⚠️ **開発初期段階**: このリポジトリには現在、プロジェクト要件文書（readme.md）のみが含まれています。実際のコードベースはまだ実装されていません。
-
-## 予定技術アーキテクチャ
-
-要件文書に基づく予定技術スタック：
-
-- **フロントエンド**: React + Tailwind CSS
-- **Canvas操作**: Fabric.jsまたはKonva.jsによる描画処理
-- **フォント**: Google Fonts API連携
-- **ホスティング**: Vercelデプロイ
-- **AI機能（オプション）**: OpenAI API / Stability AI APIによる背景生成
-
-## 実装すべきコア機能
-
-### MVP（必須機能）
-1. **キャンバス生成**: 1500×500px固定サイズ、背景色/グラデーション/画像対応
-2. **テキスト編集**: Google Fonts対応、サイズ/色/位置調整機能
-3. **リアルタイムプレビュー**: 変更の即座な視覚フィードバック
-4. **PNG出力**: 高解像度ダウンロード機能
-
-### 将来的な拡張機能
-- テンプレートシステム（ビジネス、カジュアル、イベント用テーマ）
-- AI活用キャッチフレーズ生成
-- プロフィール画像重複領域ガイド
-- 季節背景テンプレート
-- AI背景生成
+**技術スタック**: React 18 + TypeScript + Fabric.js + Tailwind CSS + Vite
 
 ## 開発コマンド
 
-プロジェクト初期化後の典型的なReactコマンド：
-
 ```bash
-# 初期セットアップ（実装時）
-npm install
-npm start          # 開発サーバー
-npm run build      # 本番ビルド
-npm test           # テスト実行
-npm run lint       # コードリンティング
+npm install        # 依存関係インストール
+npm run dev        # 開発サーバー起動 (http://localhost:5173)
+npm run build      # 本番ビルド (tsc → vite build)
+npm run preview    # ビルド結果のプレビュー
+npm run lint       # ESLint実行
+npm run lint:fix   # ESLint自動修正
+npm run format     # Prettier実行
+npm run typecheck  # TypeScript型チェック（ビルドなし）
 ```
 
-## 重要な実装考慮事項
+## アーキテクチャ概要
 
-- **ブラウザ完結処理**: サーバーコスト削減のためクライアントサイド画像生成を目指す
-- **パフォーマンス目標**: 画像生成は2秒以内で完了
-- **レスポンシブ対応**: デスクトップ、タブレット、モバイル対応
-- **日本語サポート**: Google Fonts日本語フォント適切な統合
+### コア設計パターン
 
-## Canvasライブラリ選択
+**Canvas管理**: `useCanvas` カスタムフックがFabric.jsインスタンスとCanvas状態を統合管理。Appコンポーネントはこのフックを使用してCanvas操作を行う。
 
-Fabric.jsとKonva.jsの比較検討：
-- **Fabric.js**: インタラクティブオブジェクト操作に優れ、React統合実績あり
-- **Konva.js**: 複雑なシーンで高パフォーマンス、アニメーションに適している
+**コンポーネント構成**:
+- `App.tsx`: ルートコンポーネント。左側コントロールパネル、右側プレビューパネルの2カラムレイアウト
+- `BannerCanvas`: Fabric.js Canvasのラッパー。useRefでcanvas要素への参照を管理
+- `BackgroundPicker`, `TextEditor`, `FontSelector`, `ImageUploader`, `ExportControls`: 各機能ごとの独立したUIコンポーネント
 
-## ファイル構造（予定）
-
-実装時の推奨構成：
+**状態の流れ**:
 ```
-src/
-  components/          # UIコンポーネント
-    Canvas/           # Canvas操作コンポーネント
-    TextEditor/       # テキスト編集コントロール
-    BackgroundPicker/ # 背景選択
-  hooks/              # カスタムReactフック
-  utils/              # Canvasユーティリティ、出力関数
-  constants/          # Canvas寸法、デフォルトスタイル
+User Input → Component → useCanvas Hook → Fabric.js API → Canvas描画更新
 ```
 
-## Reactベストプラクティス
+### 重要な実装詳細
 
-### コンポーネント設計
-- **関数コンポーネント**: クラスコンポーネントではなく関数コンポーネントを使用
-- **単一責任の原則**: 1つのコンポーネントは1つの責任のみを持つ
-- **Props型定義**: TypeScriptのinterfaceまたはtypeでpropsを明確に定義
-- **デフォルトProps**: 必要に応じてdefaultPropsを設定
+**Canvas初期化** (`useCanvas.ts`):
+- `useRef<HTMLCanvasElement>`でDOM要素への参照を保持
+- `useState<fabric.Canvas | null>`でFabric.jsインスタンスを管理
+- `useEffect`のクリーンアップでcanvas.dispose()を呼び出してメモリリーク防止
 
-### フック活用
-- **useState**: 状態管理には適切な粒度でuseStateを使用
-- **useEffect**: 副作用処理には依存配列を適切に設定
-- **useMemo**: 重い計算処理はuseMemoでメモ化
-- **useCallback**: イベントハンドラーはuseCallbackでメモ化
-- **カスタムフック**: ロジックの再利用にはカスタムフックを作成
+**型定義** (`src/types/canvas.ts`):
+- `TextConfig`: テキストオブジェクトの設定（位置、フォント、色、影等）
+- `BackgroundConfig`: 背景設定（単色/グラデーション/画像の3タイプ）
+- `BannerConfig`: バナー全体の設定（背景 + テキスト配列）
 
-### 状態管理
-- **ローカル状態**: コンポーネント内部のシンプルな状態はuseState
-- **グローバル状態**: アプリ全体で共有する状態はContext API、または必要に応じてZustand/Redux Toolkit
-- **Canvas状態**: Canvas操作の状態管理は専用のContextまたはカスタムフックで管理
+**定数** (`src/constants/`):
+- `canvas.ts`: CANVAS_CONFIG（WIDTH: 1500, HEIGHT: 500）
+- `fonts.ts`: 利用可能なGoogle Fontsリスト
 
-### パフォーマンス最適化
-- **React.memo**: 不要な再レンダリングを防ぐためにReact.memoを活用
-- **lazy loading**: 大きなコンポーネントはReact.lazyで遅延読み込み
-- **Canvas最適化**: Canvas操作は重いため、requestAnimationFrameで最適化
-- **debounce**: テキスト入力等はdebounceで処理頻度を制御
+## 重要な実装パターン
 
-### コード品質
-- **ESLint + Prettier**: コード品質と一貫性のためのツール設定
-- **TypeScript**: 型安全性確保のため必須
-- **Error Boundary**: エラーハンドリングのためのError Boundary実装
-- **テスト**: Jest + React Testing Libraryでユニットテスト
+### Fabric.js Canvas操作
 
-### Canvas特有の考慮事項
-- **ref管理**: Canvas要素への参照はuseRefで適切に管理
-- **メモリリーク対策**: useEffectのクリーンアップでCanvas関連のリスナーを解除
-- **レスポンシブ対応**: Canvas sizeの動的調整とデバイス比率対応
-- **パフォーマンス**: Canvas操作はフレームレートを意識した実装
+**テキスト追加**:
+```typescript
+const text = new fabric.Text(content, {
+  left: x,
+  top: y,
+  fontSize: size,
+  fill: color,
+  fontFamily: font
+});
+fabricCanvas.add(text);
+```
+
+**背景画像設定**:
+```typescript
+fabric.Image.fromURL(imageUrl, (img) => {
+  fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas), {
+    scaleX: CANVAS_WIDTH / img.width!,
+    scaleY: CANVAS_HEIGHT / img.height!
+  });
+});
+```
+
+**PNG出力**:
+```typescript
+const dataURL = fabricCanvas.toDataURL({
+  format: 'png',
+  quality: 1,
+  multiplier: 1
+});
+```
+
+### パフォーマンス考慮事項
+
+- **Canvas再描画**: 頻繁な更新時はdebounceでrenderAll()呼び出しを制御
+- **Google Fonts読み込み**: 動的に`<link>`要素を追加してフォントを読み込み。document.fonts.load()で読み込み完了を待機
+- **画像アップロード**: FileReader APIでDataURLを取得。ファイルサイズ制限（5MB）とMIMEタイプ検証を実装
+
+## コーディング規約
+
+### TypeScript
+- 関数コンポーネント: `React.FC<Props>`型を使用
+- Props定義: `interface`を使用（`type`はユニオン型のみ）
+- イベントハンドラー: `handle`プレフィックス（例: `handleTextChange`）
+
+### インポート順序
+1. React関連
+2. 外部ライブラリ（fabric等）
+3. 内部コンポーネント
+4. フック
+5. ユーティリティ
+6. 型定義
+7. 定数
+
+### Tailwind CSS
+- レイアウト → サイズ → スタイル → インタラクションの順でクラス記述
+- 複雑なスタイルのみカスタムCSSを使用
+
+## ドキュメント
+
+包括的なドキュメントは`docs/`ディレクトリに格納：
+- `requirements.md`: 機能要件、非機能要件、受け入れ基準
+- `technical-spec.md`: 技術スタック詳細、API仕様
+- `architecture.md`: コンポーネント設計、データフロー
+- `ui-ux-design.md`: レイアウト、カラーパレット、インタラクション
+- `implementation-guide.md`: セットアップ手順、実装ステップ
+- `api-spec.md`: Google Fonts API、将来的なOpenAI/Stability AI連携仕様
+- `changelog.md`: バージョン履歴
+
+詳細な設計情報や実装ガイドは`docs/README.md`を参照。
+
+## ドキュメント駆動開発
+
+このプロジェクトはコンテキストエンジニアリングの考え方を重視し、ドキュメントを中心とした開発を推奨します。
+
+### 実装前の参照ルール
+
+新機能実装やバグ修正を開始する前に、関連ドキュメントを必ず確認：
+
+1. **機能追加時**:
+   - `requirements.md`で要件と受け入れ基準を確認
+   - `architecture.md`でコンポーネント設計パターンを確認
+   - `ui-ux-design.md`でUI仕様とレイアウトを確認
+   - `implementation-guide.md`で実装手順とベストプラクティスを確認
+
+2. **API連携時**:
+   - `api-spec.md`でエンドポイント、認証、エラーハンドリングを確認
+
+3. **技術調査時**:
+   - `technical-spec.md`で既存の技術選定理由と使用方法を確認
+
+### 実装後の更新ルール
+
+実装完了後は、変更内容をドキュメントに反映：
+
+1. **新機能実装後**:
+   - `changelog.md`にバージョン履歴を追記
+   - 設計変更があれば`architecture.md`を更新
+   - 新しいUIパターンがあれば`ui-ux-design.md`を更新
+
+2. **技術スタック変更後**:
+   - `technical-spec.md`に新しいライブラリやバージョン情報を追記
+   - `implementation-guide.md`に新しい開発手順を追記
+
+3. **API追加後**:
+   - `api-spec.md`にエンドポイント仕様を追記
+
+### コンテキスト維持のベストプラクティス
+
+- **実装理由の記録**: なぜその実装方法を選んだかを`architecture.md`や`technical-spec.md`に記載
+- **トレードオフの明記**: 代替案と選択理由を文書化
+- **将来の拡張性**: Phase 2/3で追加予定の機能との整合性を考慮
+- **一貫性の維持**: 既存のコーディングパターンやUI設計に従う
+
+これにより、将来のClaude Codeインスタンスや開発者が文脈を理解しやすくなり、プロジェクトの継続性が向上します。
