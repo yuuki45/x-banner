@@ -257,7 +257,7 @@ function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         {/* Canvas Section */}
-        <section className={`bg-white rounded-lg shadow-sm border border-gray-200 mb-4 sm:mb-6 ${isPreviewSticky ? 'sticky top-4 z-10' : ''}`} aria-label="バナープレビュー">
+        <section className={`rounded-lg shadow-sm border border-gray-200 mb-4 sm:mb-6 ${isPreviewSticky ? 'sticky top-4 z-10 bg-white/80' : 'bg-white'}`} aria-label="バナープレビュー">
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h2 className="text-base sm:text-lg font-medium text-gray-900">プレビュー</h2>
