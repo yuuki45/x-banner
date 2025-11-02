@@ -1,5 +1,5 @@
 import { useEffect, useImperativeHandle, forwardRef, useState, useRef } from 'react'
-import { Canvas, IText, Gradient, FabricImage, Rect, Circle, Triangle, Polygon, Path, Group } from 'fabric'
+import { Canvas, IText, Gradient, FabricImage, Rect, Circle, Triangle, Polygon, Path } from 'fabric'
 import { useCanvas } from '../../hooks/useCanvas'
 import { CANVAS_CONFIG, DEFAULT_TEXT_CONFIG } from '../../constants/canvas'
 import { exportCanvasAsPNG, downloadImage } from '../../utils/canvas'
@@ -79,7 +79,6 @@ export const BannerCanvas = forwardRef<BannerCanvasRef, BannerCanvasProps>(
     const historyStack = useRef<string[]>([])
     const redoStack = useRef<string[]>([])
     const isLoadingHistory = useRef(false)
-    const historyStep = useRef(0)
 
     // スナップ機能の状態
     const [isSnappingEnabled, setIsSnappingEnabled] = useState(true)
